@@ -6,12 +6,14 @@ import { FastRecordBar } from './components/FastRecordBar';
 import { SquadBoard } from './components/SquadBoard';
 import { TargetWatchlist } from './components/TargetWatchlist';
 import { RoleScoutingHub } from './components/RoleScoutingHub';
+import { SetWiseAuctionTracker } from './components/SetWiseAuctionTracker';
+import { AIPlanImportModal } from './components/AIPlanImportModal';
 import { PlayerAssignModal } from './components/PlayerAssignModal';
 import { AlternativeSuggestionModal } from './components/AlternativeSuggestionModal';
 import { WinningBidModal } from './components/WinningBidModal';
 import { ToastNotification, ToastMessage } from './components/ToastNotification';
 import { generateTeamPDF } from './utils/pdfGenerator';
-import { Undo2, CheckCircle2, ShieldCheck, HelpCircle } from 'lucide-react';
+import { Undo2, CheckCircle2, ShieldCheck, HelpCircle, Sparkles, Layers, Eye, Users } from 'lucide-react';
 
 const INITIAL_25_SLOTS: Slot[] = [
   // 1 to 11: Starting Playing XI (Mandatory Core)
@@ -76,9 +78,9 @@ export const App: React.FC = () => {
     if (saved) {
       try {
         const parsed: Slot[] = JSON.parse(saved);
-        if (parsed.length === 25) {
+        if (Array.isArray(parsed) && parsed.length === 25) {
           return parsed.map((s) => {
-            if (s.player && !allPlayers.some((p) => p.id === s.player!.id)) {
+            if (s && s.player && !allPlayers.some((p) => p.id === s.player!.id)) {
               return { ...s, player: null, soldPrice: null };
             }
             return s;
@@ -95,7 +97,9 @@ export const App: React.FC = () => {
     if (saved) {
       try {
         const parsed: TargetPlayer[] = JSON.parse(saved);
-        return parsed.filter((t) => allPlayers.some((p) => p.id === t.player.id));
+        if (Array.isArray(parsed)) {
+          return parsed.filter((t) => t && t.player && t.player.id && allPlayers.some((p) => p.id === t.player.id));
+        }
       } catch (e) {}
     }
     // Starts empty - user adds players explicitly
@@ -119,6 +123,17 @@ export const App: React.FC = () => {
   const [isAlternativeModalOpen, setIsAlternativeModalOpen] = useState(false);
   const [lostPlayerForAlternative, setLostPlayerForAlternative] = useState<Player | null>(null);
 
+  // AI / ChatGPT Plan Import Modal state
+  const [isAIImportModalOpen, setIsAIImportModalOpen] = useState(false);
+
+  // Currently active live auction set (persisted)
+  const [liveSetCode, setLiveSetCode] = useState<string>(() => {
+    return localStorage.getItem('ipl_v7_live_set') || 'Marquee Set 1';
+  });
+
+  // Active section view filter ('ALL' | 'SQUAD' | 'SETS' | 'SCOUTING')
+  const [activeSectionTab, setActiveSectionTab] = useState<'ALL' | 'SQUAD' | 'SETS' | 'SCOUTING'>('ALL');
+
   // Sync to localStorage
   useEffect(() => {
     localStorage.setItem('ipl_v7_settings', JSON.stringify(settings));
@@ -132,9 +147,56 @@ export const App: React.FC = () => {
     localStorage.setItem('ipl_v7_targets', JSON.stringify(targets));
   }, [targets]);
 
+  useEffect(() => {
+    localStorage.setItem('ipl_v7_live_set', liveSetCode);
+  }, [liveSetCode]);
+
   // Save state for undo
   const saveSnapshot = () => {
     setHistory((prev) => [...prev.slice(-10), { slots, targets }]);
+  };
+
+  // Import parsed targets from AI / ChatGPT plan
+  const handleImportTargets = (
+    newTargets: TargetPlayer[],
+    mode: 'merge' | 'replace'
+  ) => {
+    saveSnapshot();
+
+    if (mode === 'replace') {
+      setTargets(newTargets);
+    } else {
+      // Merge with existing: updates budget/priority/backup if player already targeted, else appends
+      setTargets((prev) => {
+        const map = new Map<string, TargetPlayer>();
+        prev.forEach((t) => map.set(t.player.id, t));
+
+        newTargets.forEach((nt) => {
+          if (map.has(nt.player.id)) {
+            const existing = map.get(nt.player.id)!;
+            map.set(nt.player.id, {
+              ...existing,
+              targetMaxPrice: nt.targetMaxPrice,
+              priority: nt.priority,
+              backupPlayerId: nt.backupPlayerId || existing.backupPlayerId,
+              notes: nt.notes || existing.notes,
+            });
+          } else {
+            map.set(nt.player.id, nt);
+          }
+        });
+
+        return Array.from(map.values());
+      });
+    }
+
+    setToast({
+      id: Date.now().toString(),
+      type: 'success',
+      title: 'AI Auction Plan Imported',
+      description: `Loaded ${newTargets.length} target players & budgets. Set-wise separation updated!`,
+      canUndo: true,
+    });
   };
 
   const handleUndo = () => {
@@ -488,8 +550,8 @@ export const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Undo & Export */}
-        <div className="flex items-center space-x-3">
+        {/* Undo & Export & AI Import */}
+        <div className="flex items-center space-x-2.5">
           {history.length > 0 && (
             <button
               onClick={handleUndo}
@@ -502,10 +564,21 @@ export const App: React.FC = () => {
           )}
 
           <button
+            onClick={() => setIsAIImportModalOpen(true)}
+            className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-black text-xs flex items-center space-x-1.5 shadow-md shadow-indigo-500/20 transition active:scale-95"
+            title="Import target players, alternatives & budgets from ChatGPT plan"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Import AI Plan</span>
+            <span className="sm:hidden">AI Plan</span>
+          </button>
+
+          <button
             onClick={handleExportPDF}
             className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center space-x-1.5 shadow-md shadow-amber-500/20 transition active:scale-95"
           >
-            <span>Download 25-Player PDF</span>
+            <span className="hidden sm:inline">Download 25-Player PDF</span>
+            <span className="sm:hidden">PDF</span>
           </button>
         </div>
       </nav>
@@ -528,46 +601,136 @@ export const App: React.FC = () => {
           onPlayerSelected={handleDraftPlayer}
         />
 
-        {/* 3. Grid: 25-Spot Squad Board (Drag & Drop) + Target Watchlist */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left Column: Squad Board (7 cols on lg) */}
-          <div className="lg:col-span-7">
-            <SquadBoard
-              slots={slots}
-              onOpenAssignModal={handleOpenAssignModal}
-              onRemovePlayer={handleRemovePlayer}
-              onUpdateSlotPrice={handleUpdateSlotPrice}
-              onSwapSlots={handleSwapSlots}
-            />
+        {/* Section View Tabs & AI Import Quick Pill */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
+          <div className="flex items-center space-x-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+            <button
+              onClick={() => setActiveSectionTab('ALL')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                activeSectionTab === 'ALL'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              All Sections
+            </button>
+            <button
+              onClick={() => setActiveSectionTab('SQUAD')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 ${
+                activeSectionTab === 'SQUAD'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Squad & Watchlist</span>
+            </button>
+            <button
+              onClick={() => setActiveSectionTab('SETS')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 ${
+                activeSectionTab === 'SETS'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Set-Wise Tracker</span>
+              {targets.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-amber-400/20 text-amber-300">
+                  {targets.filter((t) => t.status === 'available').length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveSectionTab('SCOUTING')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 ${
+                activeSectionTab === 'SCOUTING'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>Role Scouting</span>
+            </button>
           </div>
 
-          {/* Right Column: Targeted Players & Watchlist (5 cols on lg) */}
-          <div className="lg:col-span-5">
-            <TargetWatchlist
-              targets={targets}
-              onAddTarget={handleAddTarget}
-              onRemoveTarget={handleRemoveTarget}
-              onMarkLost={handleMarkLost}
-              onQuickBuyTarget={handleQuickBuyTarget}
-              onFindAlternative={handleFindAlternative}
-              onUpdateTargetBudget={handleUpdateTargetBudget}
-              allPlayers={allPlayers}
-              slots={slots}
-            />
-          </div>
+          <button
+            onClick={() => setIsAIImportModalOpen(true)}
+            className="px-3 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-xs font-bold flex items-center space-x-1.5 transition"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Upload / Paste ChatGPT Plan</span>
+          </button>
         </div>
 
-        {/* 4. Role Scouting & Alternative Hub (Wicket-Keepers, Batsmen, All-Rounders, Bowlers) */}
-        <RoleScoutingHub
-          allPlayers={allPlayers}
-          slots={slots}
-          targets={targets}
-          onDraftPlayer={handleDraftPlayer}
-          onAddTarget={handleAddTarget}
-        />
+        {/* 3. Grid: 25-Spot Squad Board (Drag & Drop) + Target Watchlist */}
+        {(activeSectionTab === 'ALL' || activeSectionTab === 'SQUAD') && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left Column: Squad Board (7 cols on lg) */}
+            <div className="lg:col-span-7">
+              <SquadBoard
+                slots={slots}
+                onOpenAssignModal={handleOpenAssignModal}
+                onRemovePlayer={handleRemovePlayer}
+                onUpdateSlotPrice={handleUpdateSlotPrice}
+                onSwapSlots={handleSwapSlots}
+              />
+            </div>
+
+            {/* Right Column: Targeted Players & Watchlist (5 cols on lg) */}
+            <div className="lg:col-span-5">
+              <TargetWatchlist
+                targets={targets}
+                onAddTarget={handleAddTarget}
+                onRemoveTarget={handleRemoveTarget}
+                onMarkLost={handleMarkLost}
+                onQuickBuyTarget={handleQuickBuyTarget}
+                onFindAlternative={handleFindAlternative}
+                onUpdateTargetBudget={handleUpdateTargetBudget}
+                allPlayers={allPlayers}
+                slots={slots}
+                onOpenAIImport={() => setIsAIImportModalOpen(true)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* 4. Set-Wise Auction Tracker & Strategy Separation */}
+        {(activeSectionTab === 'ALL' || activeSectionTab === 'SETS') && (
+          <SetWiseAuctionTracker
+            allPlayers={allPlayers}
+            slots={slots}
+            targets={targets}
+            liveSetCode={liveSetCode}
+            onSetLiveSetCode={setLiveSetCode}
+            onDraftPlayer={handleDraftPlayer}
+            onMarkLost={handleMarkLost}
+            onAddTarget={handleAddTarget}
+            onUpdateTargetBudget={handleUpdateTargetBudget}
+          />
+        )}
+
+        {/* 5. Role Scouting & Alternative Hub (Wicket-Keepers, Batsmen, All-Rounders, Bowlers) */}
+        {(activeSectionTab === 'ALL' || activeSectionTab === 'SCOUTING') && (
+          <RoleScoutingHub
+            allPlayers={allPlayers}
+            slots={slots}
+            targets={targets}
+            onDraftPlayer={handleDraftPlayer}
+            onAddTarget={handleAddTarget}
+          />
+        )}
       </main>
 
-      {/* 5. Winning Bid Prompt Modal */}
+      {/* 6. AI / ChatGPT Plan Import Modal */}
+      <AIPlanImportModal
+        isOpen={isAIImportModalOpen}
+        onClose={() => setIsAIImportModalOpen(false)}
+        allPlayers={allPlayers}
+        onImportTargets={handleImportTargets}
+      />
+
+      {/* 7. Winning Bid Prompt Modal */}
       <WinningBidModal
         isOpen={isWinningBidModalOpen}
         onClose={() => setIsWinningBidModalOpen(false)}
@@ -580,7 +743,7 @@ export const App: React.FC = () => {
         onConfirmPurchase={handleConfirmPurchase}
       />
 
-      {/* 6. Slot Player Assign Modal */}
+      {/* 8. Slot Player Assign Modal */}
       <PlayerAssignModal
         isOpen={isAssignModalOpen}
         onClose={() => setIsAssignModalOpen(false)}
@@ -590,7 +753,7 @@ export const App: React.FC = () => {
         maxSafeBid={maxSafeBid}
       />
 
-      {/* 7. Alternative Suggestion Modal */}
+      {/* 9. Alternative Suggestion Modal */}
       <AlternativeSuggestionModal
         isOpen={isAlternativeModalOpen}
         onClose={() => setIsAlternativeModalOpen(false)}
@@ -603,7 +766,7 @@ export const App: React.FC = () => {
         onDraftAlternative={handleDraftPlayer}
       />
 
-      {/* 8. Toast Feedback with 1-Click Undo */}
+      {/* 10. Toast Feedback with 1-Click Undo */}
       <ToastNotification
         toast={toast}
         onClose={() => setToast(null)}

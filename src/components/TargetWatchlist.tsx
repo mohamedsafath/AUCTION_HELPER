@@ -28,6 +28,7 @@ interface TargetWatchlistProps {
   onUpdateTargetBudget: (targetId: string, newBudget: number) => void;
   allPlayers: Player[];
   slots: Slot[];
+  onOpenAIImport?: () => void;
 }
 
 export const TargetWatchlist: React.FC<TargetWatchlistProps> = ({
@@ -40,6 +41,7 @@ export const TargetWatchlist: React.FC<TargetWatchlistProps> = ({
   onUpdateTargetBudget,
   allPlayers,
   slots,
+  onOpenAIImport,
 }) => {
   const [filterTab, setFilterTab] = useState<'ALL' | 'ACTIVE' | 'BOUGHT' | 'LOST'>('ACTIVE');
   const [isAddingNew, setIsAddingNew] = useState(false);
@@ -124,13 +126,26 @@ export const TargetWatchlist: React.FC<TargetWatchlistProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={() => setIsAddingNew(!isAddingNew)}
-          className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 text-xs font-bold flex items-center space-x-1.5 transition self-start sm:self-auto"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>{isAddingNew ? 'Close Form' : '+ Add Target Player'}</span>
-        </button>
+        <div className="flex items-center space-x-2 self-start sm:self-auto">
+          {onOpenAIImport && (
+            <button
+              onClick={onOpenAIImport}
+              className="px-3 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 text-xs font-bold flex items-center space-x-1.5 transition shadow-sm"
+              title="Import plan from ChatGPT or AI text"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Import AI Plan</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => setIsAddingNew(!isAddingNew)}
+            className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 text-xs font-bold flex items-center space-x-1.5 transition"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>{isAddingNew ? 'Close Form' : '+ Add Target Player'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Add Target Drawer */}
@@ -369,10 +384,17 @@ export const TargetWatchlist: React.FC<TargetWatchlistProps> = ({
                         ) : (
                           <span className="text-[10px] text-slate-400">🇮🇳</span>
                         )}
-                        <span className="text-[10px] text-slate-500">
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-300 border border-amber-500/20">
                           {p.marqueeSet}
                         </span>
                       </div>
+
+                      {/* Notes / Alternative representation if present */}
+                      {target.notes && (
+                        <div className="text-[10px] text-indigo-300 bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-500/30 inline-flex items-center gap-1 mt-1">
+                          <span>🔄 {target.notes}</span>
+                        </div>
+                      )}
 
                       {/* Budget Details & Inline Editing */}
                       <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mt-1">
