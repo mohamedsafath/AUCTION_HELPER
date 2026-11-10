@@ -326,7 +326,7 @@ export const TargetWatchlist: React.FC<TargetWatchlistProps> = ({
       </div>
 
       {/* Targets List */}
-      <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
+      <div className="space-y-3 max-h-[560px] overflow-y-auto pr-1">
         {filteredTargets.length === 0 ? (
           <div className="p-8 text-center rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 space-y-3">
             <div className="w-10 h-10 rounded-xl bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
@@ -358,171 +358,191 @@ export const TargetWatchlist: React.FC<TargetWatchlistProps> = ({
             return (
               <div
                 key={target.id}
-                className={`p-3 rounded-xl border transition-all ${
+                className={`p-3.5 rounded-xl border transition-all ${
                   isBought
                     ? 'bg-emerald-950/20 border-emerald-500/30'
                     : isLost
                     ? 'bg-rose-950/20 border-rose-900/40'
-                    : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                    : 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
                 }`}
               >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  {/* Left: Player Info */}
-                  <div className="flex items-center space-x-3 min-w-0">
+                {/* 1. Card Top Row: Identity, Badges & Delete Button */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    {/* Status/Priority Icon Badge */}
                     <div
-                      className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0 ${
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0 ${
                         isBought
                           ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
                           : isLost
                           ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
                           : target.priority === 'Must-Have'
                           ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                          : 'bg-slate-800 text-slate-300'
+                          : 'bg-slate-800 text-slate-300 border border-slate-700'
                       }`}
                     >
                       {isBought ? '✓' : isLost ? '✕' : target.priority === 'Must-Have' ? '⭐' : '🎯'}
                     </div>
 
-                    <div className="min-w-0">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-[10px] font-mono text-slate-400 font-bold">
-                          {p.id}
+                    <span className="text-[11px] font-mono text-slate-400 font-bold">
+                      {p.id}
+                    </span>
+
+                    <span
+                      className={`text-sm sm:text-base font-bold ${
+                        isLost ? 'line-through text-slate-500' : 'text-white'
+                      }`}
+                    >
+                      {p.name}
+                    </span>
+
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                      {p.role}
+                    </span>
+
+                    {p.isOverseas ? (
+                      <span className="text-[10px] bg-sky-500/20 text-sky-300 px-1.5 py-0.5 rounded font-medium border border-sky-500/30">
+                        ✈️ OS
+                      </span>
+                    ) : (
+                      <span className="text-xs" title="Indian Player">🇮🇳</span>
+                    )}
+
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/20">
+                      {p.marqueeSet}
+                    </span>
+
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                        target.priority === 'Must-Have'
+                          ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                          : target.priority === 'High'
+                          ? 'bg-sky-500/20 text-sky-400 border-sky-500/30'
+                          : 'bg-slate-800 text-slate-400 border-slate-700'
+                      }`}
+                    >
+                      {target.priority}
+                    </span>
+                  </div>
+
+                  {/* Remove target action */}
+                  <button
+                    onClick={() => onRemoveTarget(target.id)}
+                    className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition flex-shrink-0"
+                    title="Remove from target list"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* 2. Form statistics full-width block */}
+                {target.form && (
+                  <div className="mt-2.5 text-xs text-slate-300 bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-800 leading-relaxed flex items-start gap-2">
+                    <span className="text-amber-400 font-bold shrink-0">📊 Form:</span>
+                    <span className="text-slate-300">{target.form}</span>
+                  </div>
+                )}
+
+                {/* 3. Notes / Alternative full-width block */}
+                {target.notes && (
+                  <div className="mt-1.5 text-xs text-indigo-200 bg-indigo-950/40 px-3 py-1.5 rounded-lg border border-indigo-500/30 leading-relaxed flex items-start gap-2">
+                    <span className="text-indigo-400 font-bold shrink-0">🔄</span>
+                    <span className="text-indigo-200/95">{target.notes}</span>
+                  </div>
+                )}
+
+                {/* 4. Footer: Budget Limits & Quick Action Buttons */}
+                <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2.5">
+                  {/* Left: Budget details / Edit */}
+                  <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                    {editingBudgetId === target.id ? (
+                      <div
+                        className="flex items-center space-x-1.5 bg-slate-900 p-1.5 rounded-lg border border-slate-700"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span className="text-[10px] text-amber-400 font-bold">Target: ₹</span>
+                        <input
+                          type="number"
+                          step="0.25"
+                          value={editingTargetPriceValue}
+                          onChange={(e) => setEditingTargetPriceValue(e.target.value)}
+                          className="w-14 bg-slate-800 text-amber-300 text-xs font-bold px-1.5 py-0.5 rounded border border-amber-500/60"
+                          title="Target / Min price"
+                        />
+                        <span className="text-[10px] text-emerald-400 font-bold">Max: ₹</span>
+                        <input
+                          type="number"
+                          step="0.25"
+                          value={editingMaxPriceValue}
+                          onChange={(e) => setEditingMaxPriceValue(e.target.value)}
+                          className="w-14 bg-slate-800 text-emerald-300 text-xs font-bold px-1.5 py-0.5 rounded border border-emerald-500/60"
+                          title="Maximum walkaway limit"
+                        />
+                        <button
+                          onClick={() => handleSaveBudget(target.id)}
+                          className="p-1 bg-amber-500 text-slate-950 rounded hover:bg-amber-400 text-xs font-bold"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-1.5">
+                        <div className="inline-flex items-center gap-1.5 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 text-xs">
+                          <span className="text-slate-400">Target:</span>
+                          <strong className="text-amber-400 font-bold">
+                            ₹{(target.targetPrice || target.targetMaxPrice).toFixed(1)} Cr
+                          </strong>
+                          <span className="text-slate-600">|</span>
+                          <span className="text-slate-400">Max:</span>
+                          <strong className="text-emerald-400 font-bold">
+                            ₹{target.targetMaxPrice.toFixed(1)} Cr
+                          </strong>
+                        </div>
+                        {!isBought && !isLost && (
+                          <button
+                            onClick={() => handleStartEditBudget(target)}
+                            className="p-1 text-slate-500 hover:text-amber-400 hover:bg-slate-800 rounded transition"
+                            title="Edit target and max budget"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* When Bought: Show Winning Bid & Savings */}
+                    {isBought && winningPrice !== undefined && (
+                      <div className="flex items-center space-x-1.5 pl-1.5 border-l border-slate-700 text-xs">
+                        <span className="text-white font-bold">
+                          Got: ₹{winningPrice.toFixed(2)} Cr
                         </span>
                         <span
-                          className={`text-sm font-bold truncate ${
-                            isLost ? 'line-through text-slate-500' : 'text-white'
+                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 ${
+                            savings >= 0
+                              ? 'bg-emerald-500/20 text-emerald-400'
+                              : 'bg-rose-500/20 text-rose-400'
                           }`}
                         >
-                          {p.name}
-                        </span>
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                          {p.role}
-                        </span>
-                        {p.isOverseas ? (
-                          <span className="text-[10px] bg-sky-500/20 text-sky-300 px-1 py-0.2 rounded font-medium">
-                            ✈️ OS
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-slate-400">🇮🇳</span>
-                        )}
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-300 border border-amber-500/20">
-                          {p.marqueeSet}
+                          {savings >= 0 ? (
+                            <>
+                              <TrendingDown className="w-3 h-3" />
+                              <span>Saved ₹{savings.toFixed(2)}Cr</span>
+                            </>
+                          ) : (
+                            <>
+                              <TrendingUp className="w-3 h-3" />
+                              <span>Over ₹{(-savings).toFixed(2)}Cr</span>
+                            </>
+                          )}
                         </span>
                       </div>
-
-                      {/* Form statistics if present */}
-                      {target.form && (
-                        <div className="text-[10px] text-slate-300 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-800 inline-flex items-center gap-1 mt-1">
-                          <span className="text-amber-400 font-bold">📊 Form:</span>
-                          <span>{target.form}</span>
-                        </div>
-                      )}
-
-                      {/* Notes / Alternative representation if present */}
-                      {target.notes && (
-                        <div className="text-[10px] text-indigo-300 bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-500/30 inline-flex items-center gap-1 mt-1">
-                          <span>🔄 {target.notes}</span>
-                        </div>
-                      )}
-
-                      {/* Budget Details & Inline Editing */}
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mt-1.5">
-                        {editingBudgetId === target.id ? (
-                          <div
-                            className="flex items-center space-x-1.5 bg-slate-900 p-1.5 rounded-lg border border-slate-700"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <span className="text-[10px] text-amber-400 font-bold">Target: ₹</span>
-                            <input
-                              type="number"
-                              step="0.25"
-                              value={editingTargetPriceValue}
-                              onChange={(e) => setEditingTargetPriceValue(e.target.value)}
-                              className="w-14 bg-slate-800 text-amber-300 text-xs font-bold px-1 py-0.5 rounded border border-amber-500/60"
-                              title="Target / Min price"
-                            />
-                            <span className="text-[10px] text-emerald-400 font-bold">Max: ₹</span>
-                            <input
-                              type="number"
-                              step="0.25"
-                              value={editingMaxPriceValue}
-                              onChange={(e) => setEditingMaxPriceValue(e.target.value)}
-                              className="w-14 bg-slate-800 text-emerald-300 text-xs font-bold px-1 py-0.5 rounded border border-emerald-500/60"
-                              title="Maximum walkaway limit"
-                            />
-                            <button
-                              onClick={() => handleSaveBudget(target.id)}
-                              className="p-1 bg-amber-500 text-slate-950 rounded hover:bg-amber-400 text-xs font-bold"
-                            >
-                              <Check className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center space-x-2">
-                            <span className="inline-flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
-                              <span className="text-[10px] text-slate-400">Target:</span>
-                              <strong className="text-amber-400 font-bold">
-                                ₹{(target.targetPrice || target.targetMaxPrice).toFixed(1)} Cr
-                              </strong>
-                              <span className="text-slate-600">|</span>
-                              <span className="text-[10px] text-slate-400">Max:</span>
-                              <strong className="text-emerald-400 font-bold">
-                                ₹{target.targetMaxPrice.toFixed(1)} Cr
-                              </strong>
-                            </span>
-                            {!isBought && !isLost && (
-                              <button
-                                onClick={() => handleStartEditBudget(target)}
-                                className="p-1 text-slate-500 hover:text-amber-400 hover:bg-slate-800 rounded transition"
-                                title="Edit target and max budget"
-                              >
-                                <Edit2 className="w-3 h-3" />
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mt-1">
-                        <span>•</span>
-                        <span>{target.priority}</span>
-
-                        {/* When Bought: Show Winning Bid & Savings */}
-                        {isBought && winningPrice !== undefined && (
-                          <div className="flex items-center space-x-1.5 pl-1 border-l border-slate-700">
-                            <span className="text-white font-bold">
-                              Got for: ₹{winningPrice.toFixed(2)} Cr
-                            </span>
-                            <span
-                              className={`text-[10px] font-bold px-1.5 py-0.2 rounded inline-flex items-center gap-0.5 ${
-                                savings >= 0
-                                  ? 'bg-emerald-500/20 text-emerald-400'
-                                  : 'bg-rose-500/20 text-rose-400'
-                              }`}
-                            >
-                              {savings >= 0 ? (
-                                <>
-                                  <TrendingDown className="w-3 h-3" />
-                                  <span>Saved ₹{savings.toFixed(2)}Cr</span>
-                                </>
-                              ) : (
-                                <>
-                                  <TrendingUp className="w-3 h-3" />
-                                  <span>Over ₹{(-savings).toFixed(2)}Cr</span>
-                                </>
-                              )}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    )}
                   </div>
 
                   {/* Right: Quick Action Buttons */}
-                  <div className="flex items-center space-x-1.5 flex-shrink-0 self-end sm:self-center">
+                  <div className="flex items-center space-x-2 ml-auto">
                     {target.status === 'available' ? (
                       <>
-                        {/* Got Him Button -> Prompts Winning Bid Modal */}
                         <button
                           onClick={() => onQuickBuyTarget(target)}
                           className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center space-x-1.5 shadow-md shadow-emerald-500/20 transition active:scale-95"
@@ -532,10 +552,9 @@ export const TargetWatchlist: React.FC<TargetWatchlistProps> = ({
                           <span>Got Player</span>
                         </button>
 
-                        {/* Lost to Rival Button */}
                         <button
                           onClick={() => onMarkLost(target.id, p)}
-                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/40 text-xs font-semibold flex items-center space-x-1 transition"
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 border border-slate-700 hover:border-rose-500/40 text-xs font-semibold flex items-center space-x-1 transition"
                           title="Lost to rival team - triggers alternative player suggestions"
                         >
                           <XCircle className="w-3.5 h-3.5" />
@@ -556,20 +575,11 @@ export const TargetWatchlist: React.FC<TargetWatchlistProps> = ({
                           <Zap className="w-3 h-3" />
                           <span>View Alternatives</span>
                         </button>
-                        <span className="text-xs text-rose-400 font-semibold px-2 py-1">
+                        <span className="text-xs text-rose-400 font-semibold px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20">
                           Lost
                         </span>
                       </div>
                     )}
-
-                    {/* Delete Target */}
-                    <button
-                      onClick={() => onRemoveTarget(target.id)}
-                      className="p-1.5 text-slate-500 hover:text-rose-400 transition"
-                      title="Remove from target list"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
                   </div>
                 </div>
               </div>
