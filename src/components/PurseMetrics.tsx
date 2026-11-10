@@ -131,11 +131,11 @@ export const PurseMetrics: React.FC<PurseMetricsProps> = ({
         <div className="flex items-center space-x-2">
           <button
             onClick={onResetXI}
-            className="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-white text-xs font-semibold flex items-center space-x-1.5 transition border border-slate-700/60"
-            title="Clear all 25 squad spots"
+            className="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-amber-400 hover:text-amber-300 text-xs font-bold flex items-center space-x-1.5 transition border border-slate-700/60 active:scale-95 shadow-sm"
+            title="Start a new auction game with fresh squad and purse"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reset</span>
+            <span>Start a new game</span>
           </button>
 
           <button

@@ -27,13 +27,15 @@ export interface Slot {
 export interface TargetPlayer {
   id: string;
   player: Player;
-  targetMaxPrice: number; // in Crores
-  priority: 'Must-Have' | 'High' | 'Backup';
+  targetPrice?: number; // Minimum / Ideal target budget (in Crores)
+  targetMaxPrice: number; // Maximum walkaway ceiling (in Crores)
+  priority: 'Must-Have' | 'High' | 'Medium' | 'Backup';
   status: 'available' | 'bought' | 'lost';
   soldPrice?: number;
   soldTo?: string; // e.g. 'CSK', 'MI', 'Rival'
   notes?: string;
   backupPlayerId?: string;
+  form?: string; // Form stats e.g. 2025/2026 runs/wickets
 }
 
 export interface AuctionSettings {

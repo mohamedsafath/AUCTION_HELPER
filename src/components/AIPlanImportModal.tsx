@@ -106,17 +106,25 @@ export const AIPlanImportModal: React.FC<AIPlanImportModalProps> = ({
     );
   };
 
-  const handleUpdateBudget = (id: string, budget: number) => {
+  const handleUpdateTargetPrice = (id: string, price: number) => {
     setParsedItems((prev) =>
       prev.map((item) =>
-        item.id === id ? { ...item, targetMaxPrice: budget } : item
+        item.id === id ? { ...item, targetPrice: price } : item
+      )
+    );
+  };
+
+  const handleUpdateMaxPrice = (id: string, maxPrice: number) => {
+    setParsedItems((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, targetMaxPrice: maxPrice } : item
       )
     );
   };
 
   const handleUpdatePriority = (
     id: string,
-    priority: 'Must-Have' | 'High' | 'Backup'
+    priority: 'Must-Have' | 'High' | 'Medium' | 'Backup'
   ) => {
     setParsedItems((prev) =>
       prev.map((item) =>
@@ -186,11 +194,13 @@ export const AIPlanImportModal: React.FC<AIPlanImportModalProps> = ({
         newTargets.push({
           id: `target_ai_${Date.now()}_${p.id}`,
           player: p,
+          targetPrice: item.targetPrice || item.targetMaxPrice,
           targetMaxPrice: item.targetMaxPrice,
           priority: item.priority,
           status: 'available',
           notes,
           backupPlayerId,
+          form: item.form,
         });
       }
 
@@ -203,6 +213,7 @@ export const AIPlanImportModal: React.FC<AIPlanImportModalProps> = ({
           newTargets.push({
             id: `target_ai_alt_${Date.now()}_${alt.id}`,
             player: alt,
+            targetPrice: altBudget,
             targetMaxPrice: altBudget,
             priority: 'Backup',
             status: 'available',
@@ -437,6 +448,14 @@ export const AIPlanImportModal: React.FC<AIPlanImportModalProps> = ({
                               </span>
                             </div>
 
+                            {/* Form Stats if present */}
+                            {item.form && (
+                              <div className="text-[10px] text-slate-300 bg-slate-900/80 px-2 py-0.5 rounded border border-slate-700/60 mt-1 truncate max-w-md">
+                                <span className="text-amber-400 font-bold">📊 Form: </span>
+                                <span>{item.form}</span>
+                              </div>
+                            )}
+
                             {/* Alternative / Notes Line */}
                             <div className="flex items-center space-x-2 mt-1 flex-wrap text-xs">
                               {alt ? (
@@ -470,6 +489,12 @@ export const AIPlanImportModal: React.FC<AIPlanImportModalProps> = ({
                                   </button>
                                 </span>
                               ) : null}
+
+                              {item.rawBackupName && item.rawBackupName !== item.rawAlternativeName && (
+                                <span className="text-[11px] text-slate-400 bg-slate-900/60 px-1.5 py-0.2 rounded border border-slate-800">
+                                  Backup: {item.rawBackupName} {item.backupBudget ? `(₹${item.backupBudget} Cr)` : ''}
+                                </span>
+                              )}
                             </div>
                           </div>
                         ) : (
@@ -491,8 +516,8 @@ export const AIPlanImportModal: React.FC<AIPlanImportModalProps> = ({
                         )}
                       </div>
 
-                      {/* Right: Editable Budget & Priority */}
-                      <div className="flex items-center space-x-3 shrink-0 pl-7 sm:pl-0">
+                      {/* Right: Editable Target, Max & Priority */}
+                      <div className="flex items-center space-x-2 sm:space-x-3 shrink-0 pl-7 sm:pl-0 flex-wrap gap-y-2">
                         {/* Priority Selector */}
                         <div className="flex flex-col items-start">
                           <label className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">
@@ -503,21 +528,46 @@ export const AIPlanImportModal: React.FC<AIPlanImportModalProps> = ({
                             onChange={(e) =>
                               handleUpdatePriority(
                                 item.id,
-                                e.target.value as 'Must-Have' | 'High' | 'Backup'
+                                e.target.value as 'Must-Have' | 'High' | 'Medium' | 'Backup'
                               )
                             }
                             className="text-xs bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-slate-200 focus:outline-none focus:border-indigo-500"
                           >
                             <option value="Must-Have">Must-Have</option>
                             <option value="High">High</option>
+                            <option value="Medium">Medium</option>
                             <option value="Backup">Backup</option>
                           </select>
                         </div>
 
-                        {/* Budget Input */}
+                        {/* Target (Min/Ideal) Input */}
                         <div className="flex flex-col items-start">
-                          <label className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">
-                            Target Budget (Cr)
+                          <label className="text-[9px] uppercase font-bold text-amber-400 tracking-wider">
+                            Target (Min) Cr
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-500">
+                              ₹
+                            </span>
+                            <input
+                              type="number"
+                              step="0.25"
+                              min="0.20"
+                              max="35.0"
+                              value={item.targetPrice ?? item.targetMaxPrice}
+                              onChange={(e) =>
+                                handleUpdateTargetPrice(item.id, parseFloat(e.target.value) || 0)
+                              }
+                              className="w-20 pl-5 pr-1 py-1 rounded-lg bg-slate-900 border border-amber-500/50 text-xs font-bold text-amber-400 focus:outline-none focus:border-amber-400"
+                              title="Target / Minimum valuation"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Max (Ceiling) Input */}
+                        <div className="flex flex-col items-start">
+                          <label className="text-[9px] uppercase font-bold text-emerald-400 tracking-wider">
+                            Max Limit Cr
                           </label>
                           <div className="relative">
                             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-500">
@@ -530,9 +580,10 @@ export const AIPlanImportModal: React.FC<AIPlanImportModalProps> = ({
                               max="35.0"
                               value={item.targetMaxPrice}
                               onChange={(e) =>
-                                handleUpdateBudget(item.id, parseFloat(e.target.value) || 0)
+                                handleUpdateMaxPrice(item.id, parseFloat(e.target.value) || 0)
                               }
-                              className="w-24 pl-5 pr-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-emerald-400 focus:outline-none focus:border-emerald-500"
+                              className="w-20 pl-5 pr-1 py-1 rounded-lg bg-slate-900 border border-emerald-500/50 text-xs font-bold text-emerald-400 focus:outline-none focus:border-emerald-500"
+                              title="Maximum walkaway ceiling price"
                             />
                           </div>
                         </div>

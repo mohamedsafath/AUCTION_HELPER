@@ -20,12 +20,12 @@ import {
 
 interface TargetWatchlistProps {
   targets: TargetPlayer[];
-  onAddTarget: (player: Player, targetMaxPrice: number, priority: 'Must-Have' | 'High' | 'Backup') => void;
+  onAddTarget: (player: Player, targetMaxPrice: number, priority: 'Must-Have' | 'High' | 'Medium' | 'Backup', targetPrice?: number) => void;
   onRemoveTarget: (targetId: string) => void;
   onMarkLost: (targetId: string, player: Player) => void;
   onQuickBuyTarget: (target: TargetPlayer) => void;
   onFindAlternative: (player: Player) => void;
-  onUpdateTargetBudget: (targetId: string, newBudget: number) => void;
+  onUpdateTargetBudget: (targetId: string, newMaxBudget: number, newTargetPrice?: number) => void;
   allPlayers: Player[];
   slots: Slot[];
   onOpenAIImport?: () => void;
@@ -47,12 +47,14 @@ export const TargetWatchlist: React.FC<TargetWatchlistProps> = ({
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [searchTargetQuery, setSearchTargetQuery] = useState('');
   const [selectedPlayerForTarget, setSelectedPlayerForTarget] = useState<Player | null>(null);
-  const [targetPriceInput, setTargetPriceInput] = useState<string>('10.0');
-  const [targetPriority, setTargetPriority] = useState<'Must-Have' | 'High' | 'Backup'>('Must-Have');
+  const [targetPriceInput, setTargetPriceInput] = useState<string>('8.0');
+  const [maxPriceInput, setMaxPriceInput] = useState<string>('11.0');
+  const [targetPriority, setTargetPriority] = useState<'Must-Have' | 'High' | 'Medium' | 'Backup'>('Must-Have');
 
   // Inline budget editing state
   const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
-  const [editingBudgetValue, setEditingBudgetValue] = useState<string>('');
+  const [editingTargetPriceValue, setEditingTargetPriceValue] = useState<string>('');
+  const [editingMaxPriceValue, setEditingMaxPriceValue] = useState<string>('');
 
   // Filtered targets
   const filteredTargets = targets.filter((t) => {
@@ -76,7 +78,8 @@ export const TargetWatchlist: React.FC<TargetWatchlistProps> = ({
   const handleSelectCandidate = (player: Player) => {
     setSelectedPlayerForTarget(player);
     const benchmark = player.previousSoldPrice || player.basePrice * 2.5 || 5.0;
-    setTargetPriceInput(benchmark.toFixed(2));
+    setTargetPriceInput(benchmark.toFixed(1));
+    setMaxPriceInput((benchmark * 1.3).toFixed(1));
   };
 
   const handleConfirmAddTarget = (e: React.FormEvent) => {
@@ -85,8 +88,9 @@ export const TargetWatchlist: React.FC<TargetWatchlistProps> = ({
       alert('Please select a player to target');
       return;
     }
-    const price = parseFloat(targetPriceInput) || 5.0;
-    onAddTarget(selectedPlayerForTarget, price, targetPriority);
+    const targetPrice = parseFloat(targetPriceInput) || 5.0;
+    const maxPrice = parseFloat(maxPriceInput) || targetPrice;
+    onAddTarget(selectedPlayerForTarget, Math.max(targetPrice, maxPrice), targetPriority, targetPrice);
     setIsAddingNew(false);
     setSelectedPlayerForTarget(null);
     setSearchTargetQuery('');
@@ -94,13 +98,15 @@ export const TargetWatchlist: React.FC<TargetWatchlistProps> = ({
 
   const handleStartEditBudget = (target: TargetPlayer) => {
     setEditingBudgetId(target.id);
-    setEditingBudgetValue(target.targetMaxPrice.toString());
+    setEditingTargetPriceValue((target.targetPrice || target.targetMaxPrice).toString());
+    setEditingMaxPriceValue(target.targetMaxPrice.toString());
   };
 
   const handleSaveBudget = (targetId: string) => {
-    const val = parseFloat(editingBudgetValue);
-    if (!isNaN(val) && val > 0) {
-      onUpdateTargetBudget(targetId, val);
+    const tVal = parseFloat(editingTargetPriceValue);
+    const mVal = parseFloat(editingMaxPriceValue);
+    if (!isNaN(mVal) && mVal > 0) {
+      onUpdateTargetBudget(targetId, mVal, !isNaN(tVal) ? tVal : mVal);
     }
     setEditingBudgetId(null);
   };
@@ -221,17 +227,31 @@ export const TargetWatchlist: React.FC<TargetWatchlistProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Target Planned Budget (₹ Cr)
+              <label className="block text-xs font-semibold text-amber-400 mb-1">
+                Target / Min Value (₹ Cr)
               </label>
               <input
                 type="number"
                 step="0.25"
                 value={targetPriceInput}
                 onChange={(e) => setTargetPriceInput(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-bold focus:outline-none focus:border-amber-500"
+                className="w-full bg-slate-900 border border-amber-500/50 rounded-lg px-2.5 py-1.5 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-400"
+                placeholder="e.g. 10.0"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-emerald-400 mb-1">
+                Max Ceiling Limit (₹ Cr)
+              </label>
+              <input
+                type="number"
+                step="0.25"
+                value={maxPriceInput}
+                onChange={(e) => setMaxPriceInput(e.target.value)}
+                className="w-full bg-slate-900 border border-emerald-500/50 rounded-lg px-2.5 py-1.5 text-xs text-emerald-300 font-bold focus:outline-none focus:border-emerald-400"
+                placeholder="e.g. 13.0"
               />
             </div>
             <div>
@@ -245,6 +265,7 @@ export const TargetWatchlist: React.FC<TargetWatchlistProps> = ({
               >
                 <option value="Must-Have">⭐ Must-Have</option>
                 <option value="High">🔥 High Priority</option>
+                <option value="Medium">⚡ Medium</option>
                 <option value="Backup">🔄 Backup Plan</option>
               </select>
             </div>
@@ -389,6 +410,14 @@ export const TargetWatchlist: React.FC<TargetWatchlistProps> = ({
                         </span>
                       </div>
 
+                      {/* Form statistics if present */}
+                      {target.form && (
+                        <div className="text-[10px] text-slate-300 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-800 inline-flex items-center gap-1 mt-1">
+                          <span className="text-amber-400 font-bold">📊 Form:</span>
+                          <span>{target.form}</span>
+                        </div>
+                      )}
+
                       {/* Notes / Alternative representation if present */}
                       {target.notes && (
                         <div className="text-[10px] text-indigo-300 bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-500/30 inline-flex items-center gap-1 mt-1">
@@ -397,53 +426,64 @@ export const TargetWatchlist: React.FC<TargetWatchlistProps> = ({
                       )}
 
                       {/* Budget Details & Inline Editing */}
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mt-1">
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mt-1.5">
                         {editingBudgetId === target.id ? (
                           <div
-                            className="flex items-center space-x-1"
+                            className="flex items-center space-x-1.5 bg-slate-900 p-1.5 rounded-lg border border-slate-700"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <span className="text-xs text-amber-400 font-bold">Budget: ₹</span>
+                            <span className="text-[10px] text-amber-400 font-bold">Target: ₹</span>
                             <input
                               type="number"
                               step="0.25"
-                              value={editingBudgetValue}
-                              onChange={(e) => setEditingBudgetValue(e.target.value)}
-                              className="w-16 bg-slate-800 text-white text-xs font-bold px-1 py-0.5 rounded border border-amber-500"
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleSaveBudget(target.id);
-                                if (e.key === 'Escape') setEditingBudgetId(null);
-                              }}
+                              value={editingTargetPriceValue}
+                              onChange={(e) => setEditingTargetPriceValue(e.target.value)}
+                              className="w-14 bg-slate-800 text-amber-300 text-xs font-bold px-1 py-0.5 rounded border border-amber-500/60"
+                              title="Target / Min price"
                             />
-                            <span className="text-xs text-slate-400">Cr</span>
+                            <span className="text-[10px] text-emerald-400 font-bold">Max: ₹</span>
+                            <input
+                              type="number"
+                              step="0.25"
+                              value={editingMaxPriceValue}
+                              onChange={(e) => setEditingMaxPriceValue(e.target.value)}
+                              className="w-14 bg-slate-800 text-emerald-300 text-xs font-bold px-1 py-0.5 rounded border border-emerald-500/60"
+                              title="Maximum walkaway limit"
+                            />
                             <button
                               onClick={() => handleSaveBudget(target.id)}
-                              className="p-1 bg-amber-500 text-slate-950 rounded hover:bg-amber-400 text-xs"
+                              className="p-1 bg-amber-500 text-slate-950 rounded hover:bg-amber-400 text-xs font-bold"
                             >
                               <Check className="w-3 h-3" />
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-center space-x-1.5">
-                            <span>
-                              Budget:{' '}
+                          <div className="flex items-center space-x-2">
+                            <span className="inline-flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
+                              <span className="text-[10px] text-slate-400">Target:</span>
                               <strong className="text-amber-400 font-bold">
-                                ₹{target.targetMaxPrice.toFixed(2)} Cr
+                                ₹{(target.targetPrice || target.targetMaxPrice).toFixed(1)} Cr
+                              </strong>
+                              <span className="text-slate-600">|</span>
+                              <span className="text-[10px] text-slate-400">Max:</span>
+                              <strong className="text-emerald-400 font-bold">
+                                ₹{target.targetMaxPrice.toFixed(1)} Cr
                               </strong>
                             </span>
                             {!isBought && !isLost && (
                               <button
                                 onClick={() => handleStartEditBudget(target)}
-                                className="p-0.5 text-slate-500 hover:text-amber-400 transition"
-                                title="Edit target budget"
+                                className="p-1 text-slate-500 hover:text-amber-400 hover:bg-slate-800 rounded transition"
+                                title="Edit target and max budget"
                               >
                                 <Edit2 className="w-3 h-3" />
                               </button>
                             )}
                           </div>
                         )}
+                      </div>
 
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mt-1">
                         <span>•</span>
                         <span>{target.priority}</span>
 

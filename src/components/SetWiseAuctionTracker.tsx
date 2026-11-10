@@ -32,8 +32,8 @@ interface SetWiseAuctionTrackerProps {
   onSetLiveSetCode: (code: string) => void;
   onDraftPlayer: (player: Player) => void;
   onMarkLost: (targetId: string, player: Player) => void;
-  onAddTarget: (player: Player, targetMaxPrice: number, priority: 'Must-Have' | 'High' | 'Backup') => void;
-  onUpdateTargetBudget: (targetId: string, newBudget: number) => void;
+  onAddTarget: (player: Player, targetMaxPrice: number, priority: 'Must-Have' | 'High' | 'Medium' | 'Backup', targetPrice?: number) => void;
+  onUpdateTargetBudget: (targetId: string, newBudget: number, newTargetPrice?: number) => void;
 }
 
 export const SetWiseAuctionTracker: React.FC<SetWiseAuctionTrackerProps> = ({
@@ -629,10 +629,16 @@ export const SetWiseAuctionTracker: React.FC<SetWiseAuctionTrackerProps> = ({
                               </button>
                             </div>
                           ) : (
-                            <div className="flex items-center space-x-1 mt-0.5">
-                              <span className="text-emerald-400 font-black text-sm">
-                                ₹{target.targetMaxPrice.toFixed(2)} Cr
-                              </span>
+                            <div className="flex items-center space-x-1.5 mt-0.5">
+                              {target.targetPrice && target.targetPrice !== target.targetMaxPrice ? (
+                                <span className="text-xs font-bold text-amber-300">
+                                  Target: ₹{target.targetPrice.toFixed(1)} Cr • <span className="text-emerald-400">Max: ₹{target.targetMaxPrice.toFixed(1)} Cr</span>
+                                </span>
+                              ) : (
+                                <span className="text-emerald-400 font-black text-sm">
+                                  ₹{target.targetMaxPrice.toFixed(2)} Cr
+                                </span>
+                              )}
                               <button
                                 onClick={() => {
                                   setEditingBudgetId(target.id);
@@ -829,9 +835,16 @@ export const SetWiseAuctionTracker: React.FC<SetWiseAuctionTrackerProps> = ({
                           {/* Target Planned Budget */}
                           <td className="py-2.5 px-3 text-right font-mono">
                             {isTarget ? (
-                              <span className="font-bold text-emerald-400">
-                                ₹{target.targetMaxPrice.toFixed(2)} Cr
-                              </span>
+                              <div className="flex flex-col items-end leading-tight">
+                                {target.targetPrice && target.targetPrice !== target.targetMaxPrice && (
+                                  <span className="text-[10px] text-amber-400 font-semibold">
+                                    Target: ₹{target.targetPrice.toFixed(1)} Cr
+                                  </span>
+                                )}
+                                <span className="font-bold text-emerald-400 text-xs">
+                                  Max: ₹{target.targetMaxPrice.toFixed(1)} Cr
+                                </span>
+                              </div>
                             ) : (
                               <span className="text-slate-600">—</span>
                             )}
@@ -1003,9 +1016,16 @@ export const SetWiseAuctionTracker: React.FC<SetWiseAuctionTrackerProps> = ({
                               </div>
 
                               <div className="flex items-center space-x-2 shrink-0">
-                                <span className="text-[11px] font-bold text-emerald-400">
-                                  ₹{target.targetMaxPrice.toFixed(2)} Cr
-                                </span>
+                                <div className="flex flex-col items-end leading-none">
+                                  {target.targetPrice && target.targetPrice !== target.targetMaxPrice && (
+                                    <span className="text-[10px] text-amber-400 font-semibold mb-0.5">
+                                      Tgt: ₹{target.targetPrice.toFixed(1)}
+                                    </span>
+                                  )}
+                                  <span className="text-[11px] font-bold text-emerald-400">
+                                    ₹{target.targetMaxPrice.toFixed(1)} Cr
+                                  </span>
+                                </div>
                                 {isBought ? (
                                   <span className="text-[10px] font-black text-emerald-400">
                                     WON

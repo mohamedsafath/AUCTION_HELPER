@@ -45,8 +45,13 @@ export const WinningBidModal: React.FC<WinningBidModalProps> = ({
 
   useEffect(() => {
     if (player && isOpen) {
-      // Default price to targetMaxPrice if target, or previousSoldPrice, or basePrice
-      const initialPrice = targetInfo?.targetMaxPrice || player.previousSoldPrice || player.basePrice || 0.3;
+      // Default price to targetPrice if target, or targetMaxPrice, or previousSoldPrice, or basePrice
+      const initialPrice =
+        targetInfo?.targetPrice ||
+        targetInfo?.targetMaxPrice ||
+        player.previousSoldPrice ||
+        player.basePrice ||
+        0.3;
       setPriceInput(initialPrice.toFixed(2));
 
       // Choose default slot: passed defaultSlotId, or first matching vacant slot, or first vacant slot
@@ -101,8 +106,8 @@ export const WinningBidModal: React.FC<WinningBidModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-amber-500/40 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="bg-slate-900 border border-amber-500/40 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-500/20 via-slate-900 to-slate-900 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -133,7 +138,7 @@ export const WinningBidModal: React.FC<WinningBidModalProps> = ({
         </div>
 
         {/* Modal Form */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
           {/* Player Summary Card */}
           <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 flex items-center justify-between">
             <div className="flex items-center space-x-2">
@@ -157,35 +162,51 @@ export const WinningBidModal: React.FC<WinningBidModalProps> = ({
           </div>
 
           {/* Planned Budget vs Winning Price */}
-          {plannedBudget !== undefined && (
-            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-xs">
-              <div>
-                <span className="text-slate-400">Target Planned Budget: </span>
-                <strong className="text-amber-400 font-bold text-sm">
-                  ₹{plannedBudget.toFixed(2)} Cr
-                </strong>
-              </div>
-              {budgetDiff !== null && (
-                <div
-                  className={`flex items-center gap-1 font-bold px-2 py-0.5 rounded ${
-                    budgetDiff >= 0
-                      ? 'bg-emerald-500/20 text-emerald-400'
-                      : 'bg-rose-500/20 text-rose-400'
-                  }`}
-                >
-                  {budgetDiff >= 0 ? (
-                    <>
-                      <TrendingDown className="w-3.5 h-3.5" />
-                      <span>₹{budgetDiff.toFixed(2)} Cr Saved</span>
-                    </>
-                  ) : (
-                    <>
-                      <TrendingUp className="w-3.5 h-3.5" />
-                      <span>₹{(-budgetDiff).toFixed(2)} Cr Over Budget</span>
-                    </>
-                  )}
+          {targetInfo && (
+            <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="flex items-center space-x-3">
+                  <div>
+                    <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider block">
+                      Target (Min)
+                    </span>
+                    <strong className="text-amber-400 font-black text-sm">
+                      ₹{(targetInfo.targetPrice || targetInfo.targetMaxPrice).toFixed(2)} Cr
+                    </strong>
+                  </div>
+                  <span className="text-slate-700">|</span>
+                  <div>
+                    <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider block">
+                      Max Ceiling
+                    </span>
+                    <strong className="text-emerald-400 font-black text-sm">
+                      ₹{targetInfo.targetMaxPrice.toFixed(2)} Cr
+                    </strong>
+                  </div>
                 </div>
-              )}
+
+                {/* Real-time Bid Health Badge */}
+                {enteredPrice > 0 && (
+                  <div>
+                    {enteredPrice <= (targetInfo.targetPrice || targetInfo.targetMaxPrice) ? (
+                      <span className="px-2.5 py-1 rounded-xl bg-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center gap-1 border border-emerald-500/30">
+                        <TrendingDown className="w-3.5 h-3.5" />
+                        <span>Under Target (-₹{((targetInfo.targetPrice || targetInfo.targetMaxPrice) - enteredPrice).toFixed(2)} Cr)</span>
+                      </span>
+                    ) : enteredPrice <= targetInfo.targetMaxPrice ? (
+                      <span className="px-2.5 py-1 rounded-xl bg-amber-500/20 text-amber-300 font-bold text-xs flex items-center gap-1 border border-amber-500/30">
+                        <TrendingUp className="w-3.5 h-3.5" />
+                        <span>Above Target, Under Max</span>
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-xl bg-rose-500/20 text-rose-400 font-black text-xs flex items-center gap-1 border border-rose-500/30">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        <span>Exceeded Max by ₹{(enteredPrice - targetInfo.targetMaxPrice).toFixed(2)} Cr!</span>
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

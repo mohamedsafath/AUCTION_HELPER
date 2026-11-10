@@ -12,8 +12,10 @@ import { PlayerAssignModal } from './components/PlayerAssignModal';
 import { AlternativeSuggestionModal } from './components/AlternativeSuggestionModal';
 import { WinningBidModal } from './components/WinningBidModal';
 import { ToastNotification, ToastMessage } from './components/ToastNotification';
+import { AuctionCompanionHUD } from './components/AuctionCompanionHUD';
+import { StartNewGameModal } from './components/StartNewGameModal';
 import { generateTeamPDF } from './utils/pdfGenerator';
-import { Undo2, CheckCircle2, ShieldCheck, HelpCircle, Sparkles, Layers, Eye, Users } from 'lucide-react';
+import { Undo2, CheckCircle2, ShieldCheck, HelpCircle, Sparkles, Layers, Eye, Users, ExternalLink, Maximize2, Minimize2, AppWindow, RotateCcw } from 'lucide-react';
 
 const INITIAL_25_SLOTS: Slot[] = [
   // 1 to 11: Starting Playing XI (Mandatory Core)
@@ -134,6 +136,42 @@ export const App: React.FC = () => {
   // Active section view filter ('ALL' | 'SQUAD' | 'SETS' | 'SCOUTING')
   const [activeSectionTab, setActiveSectionTab] = useState<'ALL' | 'SQUAD' | 'SETS' | 'SCOUTING'>('ALL');
 
+  // Detect if opened in standalone popup window via URL param or window name
+  const isStandalonePopup = typeof window !== 'undefined' && (
+    window.location.search.includes('mode=popup') ||
+    window.name === 'IPLAuctionCompanion'
+  );
+
+  // In standalone popup mode, default to compact HUD; otherwise allow user toggling
+  const [isMiniHudMode, setIsMiniHudMode] = useState<boolean>(isStandalonePopup);
+  const [isFullViewInPopup, setIsFullViewInPopup] = useState<boolean>(false);
+
+  // Cross-Window / Cross-Tab Real-Time Sync via localStorage events
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (!e.newValue) return;
+      try {
+        if (e.key === 'ipl_v7_slots') {
+          const parsedSlots = JSON.parse(e.newValue);
+          if (Array.isArray(parsedSlots)) setSlots(parsedSlots);
+        } else if (e.key === 'ipl_v7_targets') {
+          const parsedTargets = JSON.parse(e.newValue);
+          if (Array.isArray(parsedTargets)) setTargets(parsedTargets);
+        } else if (e.key === 'ipl_v7_settings') {
+          const parsedSettings = JSON.parse(e.newValue);
+          if (parsedSettings) setSettings(parsedSettings);
+        } else if (e.key === 'ipl_v7_live_set') {
+          setLiveSetCode(e.newValue);
+        }
+      } catch (err) {
+        console.error('Cross-window storage sync error:', err);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
   // Sync to localStorage
   useEffect(() => {
     localStorage.setItem('ipl_v7_settings', JSON.stringify(settings));
@@ -150,6 +188,39 @@ export const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('ipl_v7_live_set', liveSetCode);
   }, [liveSetCode]);
+
+  // Open dedicated pop-up companion window (Mobile UI dimension)
+  const handleOpenPopoutWindow = () => {
+    const width = 420;
+    const height = 840;
+    const screenW = typeof window !== 'undefined' ? window.screen.availWidth : 1440;
+    const left = Math.max(0, screenW - width - 20);
+    const top = 40;
+    const url = `${window.location.origin}${window.location.pathname}?mode=popup`;
+
+    const popout = window.open(
+      url,
+      'IPLAuctionCompanion',
+      `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`
+    );
+
+    if (popout) {
+      popout.focus();
+      setToast({
+        id: Date.now().toString(),
+        type: 'success',
+        title: 'Pop-Up Companion Window Opened! 🚀',
+        description: 'Position it next to your auction game. Live purse, safe bid & squad sync in real-time!',
+      });
+    } else {
+      setToast({
+        id: Date.now().toString(),
+        type: 'warning',
+        title: 'Pop-Up Window Was Blocked',
+        description: 'Please allow pop-ups for this tab in your browser, or switch to Mini HUD mode directly.',
+      });
+    }
+  };
 
   // Save state for undo
   const saveSnapshot = () => {
@@ -176,10 +247,12 @@ export const App: React.FC = () => {
             const existing = map.get(nt.player.id)!;
             map.set(nt.player.id, {
               ...existing,
+              targetPrice: nt.targetPrice || existing.targetPrice,
               targetMaxPrice: nt.targetMaxPrice,
               priority: nt.priority,
               backupPlayerId: nt.backupPlayerId || existing.backupPlayerId,
               notes: nt.notes || existing.notes,
+              form: nt.form || existing.form,
             });
           } else {
             map.set(nt.player.id, nt);
@@ -402,30 +475,68 @@ export const App: React.FC = () => {
     );
   };
 
-  // Update target planned budget
-  const handleUpdateTargetBudget = (targetId: string, newBudget: number) => {
+  // Update target planned budget (supports updating max price and target price)
+  const handleUpdateTargetBudget = (
+    targetId: string,
+    newBudget: number,
+    newTargetPrice?: number
+  ) => {
     saveSnapshot();
     setTargets((prev) =>
-      prev.map((t) => (t.id === targetId ? { ...t, targetMaxPrice: newBudget } : t))
+      prev.map((t) => {
+        if (t.id === targetId) {
+          return {
+            ...t,
+            targetMaxPrice: newBudget,
+            targetPrice:
+              newTargetPrice !== undefined
+                ? newTargetPrice
+                : (t.targetPrice || newBudget),
+          };
+        }
+        return t;
+      })
     );
+  };
+
+  // Start New Game Modal State
+  const [isNewGameModalOpen, setIsNewGameModalOpen] = useState(false);
+
+  // Start a new game action
+  const handleConfirmNewGame = (options: {
+    teamName: string;
+    totalPurse: number;
+    keepTargets: boolean;
+  }) => {
+    saveSnapshot();
+    setSettings((prev) => ({
+      ...prev,
+      teamName: options.teamName,
+      totalPurse: options.totalPurse,
+    }));
+    setSlots(INITIAL_25_SLOTS);
+    setLiveSetCode('Marquee Set 1');
+
+    if (options.keepTargets) {
+      setTargets((prev) =>
+        prev.map((t) => ({ ...t, status: 'available', soldPrice: undefined, soldTo: undefined }))
+      );
+    } else {
+      setTargets([]);
+    }
+
+    setToast({
+      id: Date.now().toString(),
+      type: 'success',
+      title: 'New Game Started! 🏏',
+      description: `Team: ${options.teamName} • Purse: ₹${options.totalPurse.toFixed(1)} Cr • All 25 squad spots reset.`,
+      canUndo: true,
+    });
   };
 
   // Reset all 25 slots
   const handleResetXI = () => {
-    if (window.confirm('Are you sure you want to clear all 25 squad spots?')) {
-      saveSnapshot();
-      setSlots(INITIAL_25_SLOTS);
-      setTargets((prev) =>
-        prev.map((t) => (t.status === 'bought' ? { ...t, status: 'available' } : t))
-      );
-      setToast({
-        id: Date.now().toString(),
-        type: 'info',
-        title: 'Squad Reset',
-        description: 'All 25 roster spots cleared.',
-        canUndo: true,
-      });
-    }
+    setIsNewGameModalOpen(true);
   };
 
   // Quick buy from target watchlist -> opens WinningBidModal
@@ -501,12 +612,14 @@ export const App: React.FC = () => {
   const handleAddTarget = (
     player: Player,
     targetMaxPrice: number,
-    priority: 'Must-Have' | 'High' | 'Backup'
+    priority: 'Must-Have' | 'High' | 'Medium' | 'Backup' = 'High',
+    targetPrice?: number
   ) => {
     saveSnapshot();
     const newTarget: TargetPlayer = {
       id: `target_${Date.now()}`,
       player,
+      targetPrice: targetPrice || targetMaxPrice,
       targetMaxPrice,
       priority,
       status: 'available',
@@ -516,7 +629,7 @@ export const App: React.FC = () => {
       id: Date.now().toString(),
       type: 'success',
       title: `Target Added: ${player.name}`,
-      description: `Planned Budget: ₹${targetMaxPrice.toFixed(2)} Cr (${priority})`,
+      description: `Target: ₹${(targetPrice || targetMaxPrice).toFixed(1)} Cr | Max: ₹${targetMaxPrice.toFixed(1)} Cr (${priority})`,
       canUndo: true,
     });
   };
@@ -534,8 +647,119 @@ export const App: React.FC = () => {
 
   const activeSlot = slots.find((s) => s.id === activeSlotId) || null;
 
+  // RENDER POP-UP COMPANION HUD (When in standalone pop-up window or when user toggles Mini HUD)
+  if ((isStandalonePopup && !isFullViewInPopup) || isMiniHudMode) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+        <AuctionCompanionHUD
+          settings={settings}
+          slots={slots}
+          targets={targets}
+          allPlayers={allPlayers}
+          liveSetCode={liveSetCode}
+          onSetLiveSetCode={setLiveSetCode}
+          onDraftPlayer={handleDraftPlayer}
+          onMarkLost={handleMarkLost}
+          onAddTarget={handleAddTarget}
+          onUpdateTargetBudget={handleUpdateTargetBudget}
+          onRemoveTarget={handleRemoveTarget}
+          onOpenAssignModal={handleOpenAssignModal}
+          onRemovePlayer={handleRemovePlayer}
+          onUpdateSlotPrice={handleUpdateSlotPrice}
+          onOpenAIImport={() => setIsAIImportModalOpen(true)}
+          onUndo={handleUndo}
+          historyCount={history.length}
+          isStandalonePopup={isStandalonePopup}
+          onOpenPopoutWindow={handleOpenPopoutWindow}
+          onToggleFullView={() => {
+            if (isStandalonePopup) {
+              setIsFullViewInPopup(true);
+            } else {
+              setIsMiniHudMode(false);
+            }
+          }}
+          isFullView={false}
+          onStartNewGame={() => setIsNewGameModalOpen(true)}
+        />
+
+        {/* Start a New Game Modal */}
+        <StartNewGameModal
+          isOpen={isNewGameModalOpen}
+          onClose={() => setIsNewGameModalOpen(false)}
+          currentSettings={settings}
+          onConfirmNewGame={handleConfirmNewGame}
+        />
+
+        {/* Modals integrated seamlessly in Pop-Up Mode */}
+        <AIPlanImportModal
+          isOpen={isAIImportModalOpen}
+          onClose={() => setIsAIImportModalOpen(false)}
+          allPlayers={allPlayers}
+          onImportTargets={handleImportTargets}
+        />
+
+        <WinningBidModal
+          isOpen={isWinningBidModalOpen}
+          onClose={() => setIsWinningBidModalOpen(false)}
+          player={winningBidPlayer}
+          targetInfo={winningBidTarget}
+          slots={slots}
+          defaultSlotId={winningBidDefaultSlotId}
+          remainingPurse={remainingPurse}
+          maxSafeBid={maxSafeBid}
+          onConfirmPurchase={handleConfirmPurchase}
+        />
+
+        <PlayerAssignModal
+          isOpen={isAssignModalOpen}
+          onClose={() => setIsAssignModalOpen(false)}
+          targetSlot={activeSlot}
+          playersList={allPlayers}
+          onConfirmAssign={handleConfirmAssign}
+          maxSafeBid={maxSafeBid}
+        />
+
+        <AlternativeSuggestionModal
+          isOpen={isAlternativeModalOpen}
+          onClose={() => setIsAlternativeModalOpen(false)}
+          lostPlayer={lostPlayerForAlternative}
+          allPlayers={allPlayers}
+          slots={slots}
+          targets={targets}
+          maxSafeBid={maxSafeBid}
+          onTargetAlternative={handleTargetAlternative}
+          onDraftAlternative={handleDraftPlayer}
+        />
+
+        <ToastNotification
+          toast={toast}
+          onClose={() => setToast(null)}
+          onUndo={handleUndo}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans pb-16">
+      {/* Top Banner when in Pop-Up Standalone Window viewing Full Desktop Mode */}
+      {isStandalonePopup && isFullViewInPopup && (
+        <div className="bg-gradient-to-r from-amber-500/20 via-yellow-500/20 to-amber-500/20 border-b border-amber-500/40 px-4 py-2 text-xs flex items-center justify-between text-amber-300">
+          <div className="flex items-center space-x-2">
+            <AppWindow className="w-4 h-4 text-amber-400" />
+            <span className="font-bold">Pop-Up Window Mode</span>
+            <span className="hidden sm:inline text-slate-400">• Viewing full desktop view</span>
+          </div>
+          <button
+            onClick={() => setIsFullViewInPopup(false)}
+            className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center space-x-1 transition"
+          >
+            <Minimize2 className="w-3.5 h-3.5" />
+            <span>Switch to Compact HUD</span>
+          </button>
+        </div>
+      )}
+
       {/* Top Navigation Bar */}
       <nav className="border-b border-slate-800/80 bg-slate-900/70 backdrop-blur-md sticky top-0 z-40 px-4 sm:px-8 py-3 flex items-center justify-between">
         <div className="flex items-center space-x-3">
@@ -550,8 +774,8 @@ export const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Undo & Export & AI Import */}
-        <div className="flex items-center space-x-2.5">
+        {/* Undo & Start New Game & Pop-Up & Export & AI Import */}
+        <div className="flex items-center space-x-2">
           {history.length > 0 && (
             <button
               onClick={handleUndo}
@@ -563,9 +787,43 @@ export const App: React.FC = () => {
             </button>
           )}
 
+          {/* Start a New Game Button */}
+          <button
+            onClick={() => setIsNewGameModalOpen(true)}
+            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 text-xs font-bold flex items-center space-x-1.5 transition border border-slate-700/60 active:scale-95 shadow-sm"
+            title="Start a new auction game with fresh squad and purse"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Start a new game</span>
+            <span className="sm:hidden">New Game</span>
+          </button>
+
+          {/* Dedicated Pop-up Mini Window Launcher */}
+          {!isStandalonePopup && (
+            <button
+              onClick={handleOpenPopoutWindow}
+              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs flex items-center space-x-1.5 shadow-md shadow-amber-500/20 transition active:scale-95"
+              title="Open standalone pop-up window beside your live auction game tab"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Pop-up Window</span>
+              <span className="sm:hidden">Pop-up</span>
+            </button>
+          )}
+
+          {/* Mini Companion HUD In-Tab Mode Toggle */}
+          <button
+            onClick={() => setIsMiniHudMode(true)}
+            className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold flex items-center space-x-1.5 transition border border-slate-700/60"
+            title="Switch into compact live companion HUD in this tab"
+          >
+            <Minimize2 className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden md:inline">Mini HUD</span>
+          </button>
+
           <button
             onClick={() => setIsAIImportModalOpen(true)}
-            className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-black text-xs flex items-center space-x-1.5 shadow-md shadow-indigo-500/20 transition active:scale-95"
+            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-black text-xs flex items-center space-x-1.5 shadow-md shadow-indigo-500/20 transition active:scale-95"
             title="Import target players, alternatives & budgets from ChatGPT plan"
           >
             <Sparkles className="w-3.5 h-3.5" />
@@ -575,7 +833,7 @@ export const App: React.FC = () => {
 
           <button
             onClick={handleExportPDF}
-            className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center space-x-1.5 shadow-md shadow-amber-500/20 transition active:scale-95"
+            className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center space-x-1.5 shadow-md shadow-amber-500/20 transition active:scale-95"
           >
             <span className="hidden sm:inline">Download 25-Player PDF</span>
             <span className="sm:hidden">PDF</span>
@@ -766,7 +1024,15 @@ export const App: React.FC = () => {
         onDraftAlternative={handleDraftPlayer}
       />
 
-      {/* 10. Toast Feedback with 1-Click Undo */}
+      {/* 10. Start a New Game Modal */}
+      <StartNewGameModal
+        isOpen={isNewGameModalOpen}
+        onClose={() => setIsNewGameModalOpen(false)}
+        currentSettings={settings}
+        onConfirmNewGame={handleConfirmNewGame}
+      />
+
+      {/* 11. Toast Feedback with 1-Click Undo */}
       <ToastNotification
         toast={toast}
         onClose={() => setToast(null)}

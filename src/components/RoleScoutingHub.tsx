@@ -15,7 +15,7 @@ interface RoleScoutingHubProps {
   slots: Slot[];
   targets: TargetPlayer[];
   onDraftPlayer: (player: Player) => void;
-  onAddTarget: (player: Player, targetMaxPrice: number, priority: 'Must-Have' | 'High' | 'Backup') => void;
+  onAddTarget: (player: Player, targetMaxPrice: number, priority: 'Must-Have' | 'High' | 'Medium' | 'Backup', targetPrice?: number) => void;
 }
 
 export const RoleScoutingHub: React.FC<RoleScoutingHubProps> = ({
