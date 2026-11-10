@@ -181,13 +181,55 @@ export const AuctionCompanionHUD: React.FC<AuctionCompanionHUDProps> = ({
     return targets.filter((t) => setIds.has(t.player.id));
   }, [playersInActiveSet, targets]);
 
+  // Separate targeted players (sorted by priority & status) vs remaining players in active set
+  const { targetedInActiveSet, otherPlayersInActiveSet } = useMemo(() => {
+    const targetMap = new Map(targets.map((t) => [t.player.id, t]));
+    const targeted: Player[] = [];
+    const others: Player[] = [];
+
+    for (const p of playersInActiveSet) {
+      if (targetMap.has(p.id)) {
+        targeted.push(p);
+      } else {
+        others.push(p);
+      }
+    }
+
+    const priorityWeight: Record<string, number> = {
+      'Must-Have': 4,
+      High: 3,
+      Medium: 2,
+      Backup: 1,
+    };
+
+    // Sort targeted players: available targets first, then by priority (Must-Have > High > Medium > Backup)
+    targeted.sort((a, b) => {
+      const tA = targetMap.get(a.id);
+      const tB = targetMap.get(b.id);
+      const isDraftedA = draftedPlayerIds.has(a.id);
+      const isDraftedB = draftedPlayerIds.has(b.id);
+      const isLostA = tA?.status === 'lost';
+      const isLostB = tB?.status === 'lost';
+
+      const activeA = !isDraftedA && !isLostA ? 1 : 0;
+      const activeB = !isDraftedB && !isLostB ? 1 : 0;
+      if (activeA !== activeB) return activeB - activeA;
+
+      const pA = tA?.priority ? priorityWeight[tA.priority] || 0 : 0;
+      const pB = tB?.priority ? priorityWeight[tB.priority] || 0 : 0;
+      return pB - pA;
+    });
+
+    return { targetedInActiveSet: targeted, otherPlayersInActiveSet: others };
+  }, [playersInActiveSet, targets, draftedPlayerIds]);
+
   // Filtered targets in TARGETS tab
   const filteredTargets = useMemo(() => {
     if (targetPriorityFilter === 'ALL') return targets;
     return targets.filter((t) => t.priority === targetPriorityFilter);
   }, [targets, targetPriorityFilter]);
 
-  // Scout filtered players
+  // Scout filtered players (sorted with targets first)
   const scoutFilteredPlayers = useMemo(() => {
     let list = allPlayers.filter((p) => !draftedPlayerIds.has(p.id));
 
@@ -207,8 +249,16 @@ export const AuctionCompanionHUD: React.FC<AuctionCompanionHUDProps> = ({
       );
     }
 
+    // Show targeted players first in Scout
+    const targetSet = new Set(targets.map((t) => t.player.id));
+    list.sort((a, b) => {
+      const aTarget = targetSet.has(a.id) ? 1 : 0;
+      const bTarget = targetSet.has(b.id) ? 1 : 0;
+      return bTarget - aTarget;
+    });
+
     return list.slice(0, 40);
-  }, [allPlayers, draftedPlayerIds, scoutRoleFilter, scoutSearchQuery]);
+  }, [allPlayers, draftedPlayerIds, scoutRoleFilter, scoutSearchQuery, targets]);
 
   // Role Badge Helper
   const renderRoleBadge = (role: PlayerRole) => {
@@ -251,6 +301,138 @@ export const AuctionCompanionHUD: React.FC<AuctionCompanionHUDProps> = ({
     const newMax = Math.max(0.3, +(currentTarget.targetMaxPrice + delta).toFixed(2));
     const newTarget = currentTarget.targetPrice ? Math.max(0.3, +(currentTarget.targetPrice + delta).toFixed(2)) : newMax;
     onUpdateTargetBudget(targetId, newMax, newTarget);
+  };
+
+  // Reusable card renderer for players in active set
+  const renderLiveSetPlayerCard = (player: Player) => {
+    const target = targets.find((t) => t.player.id === player.id);
+    const isDrafted = draftedPlayerIds.has(player.id);
+    const isLost = target?.status === 'lost';
+
+    return (
+      <div
+        key={player.id}
+        className={`p-3 rounded-2xl border transition-all ${
+          isDrafted
+            ? 'bg-emerald-950/20 border-emerald-500/40 opacity-75'
+            : isLost
+            ? 'bg-rose-950/20 border-rose-900/40 opacity-70'
+            : target
+            ? 'bg-gradient-to-r from-amber-950/25 via-slate-900 to-slate-900 border-amber-500/45 shadow-md'
+            : 'bg-slate-900 border-slate-800/90 hover:border-slate-700'
+        }`}
+      >
+        {/* Top Row: Name, Badges */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+              <span className="font-black text-sm text-white tracking-tight truncate">
+                {player.name}
+              </span>
+              {player.isOverseas && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-bold inline-flex items-center gap-0.5 border border-cyan-500/30">
+                  <Plane className="w-2.5 h-2.5" /> OS
+                </span>
+              )}
+              {renderRoleBadge(player.role)}
+              {target && (
+                <span
+                  className={`text-[9px] px-1.5 py-0.2 rounded font-black ${
+                    target.priority === 'Must-Have'
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      : target.priority === 'High'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      : 'bg-slate-800 text-slate-300 border border-slate-700'
+                  }`}
+                >
+                  {target.priority}
+                </span>
+              )}
+            </div>
+
+            {/* Base Price & Planned Budget */}
+            <div className="mt-1 flex items-center space-x-2 text-xs text-slate-400 flex-wrap gap-y-1">
+              <span>
+                Base: <strong className="text-white">₹{player.basePrice} Cr</strong>
+              </span>
+              {target && (
+                <span className="inline-flex items-center gap-1 bg-slate-950/80 px-2 py-0.5 rounded border border-amber-500/30 text-[11px]">
+                  <span className="text-slate-400">Target:</span>
+                  <strong className="text-amber-400 font-bold">
+                    ₹{(target.targetPrice || target.targetMaxPrice).toFixed(1)} Cr
+                  </strong>
+                  <span className="text-slate-600">|</span>
+                  <span className="text-slate-400">Max:</span>
+                  <strong className="text-emerald-400 font-bold">
+                    ₹{target.targetMaxPrice.toFixed(1)} Cr
+                  </strong>
+                </span>
+              )}
+            </div>
+
+            {/* Form stats if present */}
+            {target?.form && (
+              <div className="mt-1.5 text-[10px] text-slate-300 bg-slate-950/90 px-2 py-1 rounded border border-slate-800 leading-tight">
+                <span className="text-amber-400 font-bold mr-1">📊 Form:</span>
+                <span>{target.form}</span>
+              </div>
+            )}
+
+            {/* Alternative note if present */}
+            {target?.notes && (
+              <div className="mt-1 text-[10px] text-indigo-300 bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-500/30 flex items-center gap-1">
+                <span className="text-indigo-400 shrink-0">🔄</span>
+                <span className="truncate">{target.notes}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center space-x-1.5 shrink-0 self-start mt-0.5">
+            {isDrafted ? (
+              <span className="px-2.5 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-400 font-black text-xs border border-emerald-500/30">
+                ✓ In Squad
+              </span>
+            ) : isLost ? (
+              <span className="px-2.5 py-1.5 rounded-xl bg-rose-500/20 text-rose-400 font-bold text-xs border border-rose-500/30">
+                Lost
+              </span>
+            ) : (
+              <>
+                {/* Big Green/Gold WON Button */}
+                <button
+                  onClick={() => onDraftPlayer(player)}
+                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs flex items-center space-x-1 shadow-md shadow-emerald-500/20 active:scale-95 transition"
+                  title="Record Winning Bid"
+                >
+                  <Gavel className="w-3.5 h-3.5" />
+                  <span>WON</span>
+                </button>
+
+                {/* Big Red LOST Button if Targeted, else Add Button */}
+                {target ? (
+                  <button
+                    onClick={() => onMarkLost(target.id, player)}
+                    className="px-2.5 py-1.5 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 font-black text-xs active:scale-95 transition"
+                    title="Mark as Lost (Opens Alternatives)"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => onAddTarget(player, player.basePrice * 2 || 2.0, 'High')}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-xs border border-slate-700 active:scale-95 transition"
+                    title="Add to Watchlist"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -547,127 +729,48 @@ export const AuctionCompanionHUD: React.FC<AuctionCompanionHUDProps> = ({
               </div>
             </div>
 
-            {/* List of Players in Current Set */}
-            <div className="space-y-2">
-              <div className="text-xs font-black text-slate-400 uppercase tracking-wider px-1">
-                Players in Set ({playersInActiveSet.length})
-              </div>
-
+            {/* List of Players in Current Set: Targeted First, then Other Players */}
+            <div className="space-y-3">
               {playersInActiveSet.length === 0 ? (
                 <div className="text-center py-8 text-xs text-slate-500 bg-slate-900/40 rounded-2xl border border-slate-800 p-4">
                   No players found in this set.
                 </div>
               ) : (
-                playersInActiveSet.map((player) => {
-                  const target = targets.find((t) => t.player.id === player.id);
-                  const isDrafted = draftedPlayerIds.has(player.id);
-                  const isLost = target?.status === 'lost';
+                <>
+                  {/* 1. TARGETED PLAYERS IN SET (DISPLAYED FIRST) */}
+                  {targetedInActiveSet.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between px-1">
+                        <span className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Targeted in this Set ({targetedInActiveSet.length})</span>
+                        </span>
+                        <span className="text-[10px] text-amber-400/80 font-bold">Priority Wishlist</span>
+                      </div>
 
-                  return (
-                    <div
-                      key={player.id}
-                      className={`p-3 rounded-2xl border transition-all ${
-                        isDrafted
-                          ? 'bg-emerald-950/20 border-emerald-500/40 opacity-75'
-                          : isLost
-                          ? 'bg-rose-950/20 border-rose-900/40 opacity-70'
-                          : target
-                          ? 'bg-gradient-to-r from-amber-950/25 to-slate-900 border-amber-500/40 shadow-md'
-                          : 'bg-slate-900 border-slate-800/90 hover:border-slate-700'
-                      }`}
-                    >
-                      {/* Top Row: Name, Badges */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
-                            <span className="font-black text-sm text-white tracking-tight truncate">
-                              {player.name}
-                            </span>
-                            {player.isOverseas && (
-                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-bold inline-flex items-center gap-0.5 border border-cyan-500/30">
-                                <Plane className="w-2.5 h-2.5" /> OS
-                              </span>
-                            )}
-                            {renderRoleBadge(player.role)}
-                            {target && (
-                              <span
-                                className={`text-[9px] px-1.5 py-0.2 rounded font-black ${
-                                  target.priority === 'Must-Have'
-                                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                }`}
-                              >
-                                {target.priority}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Base Price & Planned Budget */}
-                          <div className="mt-1 flex items-center space-x-2 text-xs text-slate-400 flex-wrap">
-                            <span>Base: <strong className="text-white">₹{player.basePrice} Cr</strong></span>
-                            {target && (
-                              <span className="inline-flex items-center gap-1 bg-slate-950/80 px-2 py-0.5 rounded border border-amber-500/30 text-[11px]">
-                                <span className="text-slate-400">Target:</span>
-                                <strong className="text-amber-400 font-bold">
-                                  ₹{(target.targetPrice || target.targetMaxPrice).toFixed(1)} Cr
-                                </strong>
-                                <span className="text-slate-600">|</span>
-                                <span className="text-slate-400">Max:</span>
-                                <strong className="text-emerald-400 font-bold">
-                                  ₹{target.targetMaxPrice.toFixed(1)} Cr
-                                </strong>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex items-center space-x-1.5 shrink-0">
-                          {isDrafted ? (
-                            <span className="px-2.5 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-400 font-black text-xs border border-emerald-500/30">
-                              ✓ In Squad
-                            </span>
-                          ) : isLost ? (
-                            <span className="px-2.5 py-1.5 rounded-xl bg-rose-500/20 text-rose-400 font-bold text-xs border border-rose-500/30">
-                              Lost
-                            </span>
-                          ) : (
-                            <>
-                              {/* Big Green/Gold WON Button */}
-                              <button
-                                onClick={() => onDraftPlayer(player)}
-                                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs flex items-center space-x-1 shadow-md shadow-emerald-500/20 active:scale-95 transition"
-                                title="Record Winning Bid"
-                              >
-                                <Gavel className="w-3.5 h-3.5" />
-                                <span>WON</span>
-                              </button>
-
-                              {/* Big Red LOST Button if Targeted, else Add Button */}
-                              {target ? (
-                                <button
-                                  onClick={() => onMarkLost(target.id, player)}
-                                  className="px-2.5 py-1.5 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 font-black text-xs active:scale-95 transition"
-                                  title="Mark as Lost (Opens Alternatives)"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => onAddTarget(player, player.basePrice * 2 || 2.0, 'High')}
-                                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-xs border border-slate-700 active:scale-95 transition"
-                                  title="Add to Watchlist"
-                                >
-                                  <Plus className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </div>
+                      <div className="space-y-2">
+                        {targetedInActiveSet.map((player) => renderLiveSetPlayerCard(player))}
                       </div>
                     </div>
-                  );
-                })
+                  )}
+
+                  {/* 2. OTHER PLAYERS IN SET */}
+                  {otherPlayersInActiveSet.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between px-1">
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                          {targetedInActiveSet.length > 0
+                            ? `Other Players in Set (${otherPlayersInActiveSet.length})`
+                            : `Players in Set (${playersInActiveSet.length})`}
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {otherPlayersInActiveSet.map((player) => renderLiveSetPlayerCard(player))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
